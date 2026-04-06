@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { StatusBadge } from "./StatusBadge";
+import { StatusBadge, StatusDot } from "./StatusBadge";
 import type { BackupRun, RunStatus } from "@/lib/types";
 
 function overallStatus(run: BackupRun): RunStatus {
@@ -11,7 +11,15 @@ function overallStatus(run: BackupRun): RunStatus {
   return "success";
 }
 
-function fmt(bytes: number): string {
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null) return "--";
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}m ${secs}s`;
+}
+
+function formatBytes(bytes: number): string {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
   return `${(bytes / 1e3).toFixed(0)} KB`;
@@ -20,76 +28,142 @@ function fmt(bytes: number): string {
 export function RunTable({ runs, slug }: { runs: BackupRun[]; slug: string }) {
   if (runs.length === 0) {
     return (
-      <p className="text-slate-500 text-sm py-6 text-center">
-        No backup runs found.
-      </p>
+      <div className="glass-card gradient-border p-12 text-center">
+        <div className="w-14 h-14 rounded-xl bg-secondary mx-auto mb-4 flex items-center justify-center">
+          <svg
+            className="w-7 h-7 text-muted-foreground"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-foreground mb-2">No backup runs found</h3>
+        <p className="text-muted-foreground text-sm">
+          Run your first backup to see the history here.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50">
-          <tr>
-            {["Date", "Status", "Type", "Objects", "Records", "Duration", ""].map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {runs.map((run) => {
-            const m = run.manifest;
-            const successCount = m?.objects.filter((o) => o.status === "success").length ?? "—";
-            const errorCount = m?.objects.filter((o) => o.status === "error").length ?? 0;
-            const totalRecords = m?.objects.reduce((s, o) => s + o.record_count, 0) ?? "—";
-
-            return (
-              <tr key={run.date} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-3 font-mono font-medium text-slate-800">
-                  {run.date}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={overallStatus(run)} />
-                </td>
-                <td className="px-4 py-3 text-slate-600 capitalize">
-                  {m?.run_type ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {m ? (
-                    <span>
-                      <span className="text-emerald-700">{successCount}</span>
-                      {errorCount > 0 && (
-                        <span className="text-red-600"> / {errorCount} err</span>
-                      )}
-                    </span>
-                  ) : "—"}
-                </td>
-                <td className="px-4 py-3 text-slate-700">
-                  {typeof totalRecords === "number"
-                    ? totalRecords.toLocaleString()
-                    : totalRecords}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {m?.duration_seconds != null ? `${m.duration_seconds}s` : "—"}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/clients/${slug}/runs/${run.date}`}
-                    className="text-brand-600 hover:text-brand-700 font-medium hover:underline"
+    <div className="glass-card gradient-border overflow-hidden">
+      <div className="overflow-x-auto custom-scrollbar">
+        <table className="min-w-full">
+          <thead>
+            <tr className="border-b border-border bg-secondary/30">
+              {["Date", "Status", "Type", "Objects", "Records", "Size", "Duration", ""].map(
+                (h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
                   >
-                    View →
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    {h}
+                  </th>
+                )
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {runs.map((run) => {
+              const m = run.manifest;
+              const successCount =
+                m?.objects.filter((o) => o.status === "success").length ?? 0;
+              const errorCount =
+                m?.objects.filter((o) => o.status === "error").length ?? 0;
+              const totalRecords =
+                m?.objects.reduce((s, o) => s + o.record_count, 0) ?? 0;
+              const totalSize =
+                m?.objects.reduce((s, o) => s + o.file_size_bytes, 0) ?? 0;
+
+              return (
+                <tr
+                  key={run.date}
+                  className="hover:bg-secondary/30 transition-colors group"
+                >
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <StatusDot status={overallStatus(run)} />
+                      <span className="font-mono text-sm font-medium text-foreground">
+                        {run.date}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <StatusBadge status={overallStatus(run)} />
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-sm text-muted-foreground capitalize">
+                      {m?.run_type ?? "--"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    {m ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm text-success">
+                          {successCount}
+                        </span>
+                        {errorCount > 0 && (
+                          <>
+                            <span className="text-muted-foreground/50">/</span>
+                            <span className="font-mono text-sm text-error">
+                              {errorCount}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">--</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono text-sm text-foreground">
+                      {totalRecords > 0 ? totalRecords.toLocaleString() : "--"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono text-sm text-muted-foreground">
+                      {totalSize > 0 ? formatBytes(totalSize) : "--"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono text-sm text-muted-foreground">
+                      {formatDuration(m?.duration_seconds)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <Link
+                      href={`/clients/${slug}/runs/${run.date}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                    >
+                      View
+                      <svg
+                        className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                        />
+                      </svg>
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
