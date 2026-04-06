@@ -1,0 +1,36 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: sf-backup-${CLIENT_SLUG}-data
+  labels:
+    client: ${CLIENT_SLUG}
+    backup-type: data
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          timeoutSeconds: 3600
+          maxRetries: 3
+          containers:
+            - image: us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/sf-backup/backup-runner:latest
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+              env:
+                - name: CLIENT_SLUG
+                  value: ${CLIENT_SLUG}
+                - name: SF_API_VERSION
+                  value: "59.0"
+                - name: BACKUP_MODE
+                  value: data
+                - name: RETENTION_DAYS
+                  value: "90"
+                - name: NOTIFICATION_EMAILS
+                  value: ${NOTIFICATION_EMAILS}
+                - name: GCP_PROJECT_ID
+                  value: ${GCP_PROJECT_ID}
+                - name: LOG_LEVEL
+                  value: INFO
+          serviceAccountName: sf-backup-${CLIENT_SLUG}@${GCP_PROJECT_ID}.iam.gserviceaccount.com

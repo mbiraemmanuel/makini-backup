@@ -1,0 +1,33 @@
+# Secrets & credentials — never commit
+clients/*-secrets.json
+dashboard/.env.local
+*.pem
+*.key
+jobs/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Node
+dashboard/node_modules/
+dashboard/.next/
+dashboard/tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# backups
+backups/
+
+# sfdx
+.sfdx/
+.sf
+

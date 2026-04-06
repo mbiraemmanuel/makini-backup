@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Stores per-client configuration for the Makini SF Backup solution. One record per client (slug). Values are read by the Cloud Run backup job at runtime.</description>
+    <label>Backup Configuration</label>
+    <pluralLabel>Backup Configurations</pluralLabel>
+    <visibility>Public</visibility>
+</CustomObject>

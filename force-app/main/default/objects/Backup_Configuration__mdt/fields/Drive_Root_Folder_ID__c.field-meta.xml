@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Drive_Root_Folder_ID__c</fullName>
+    <description>Google Drive folder ID where backups for this client are stored. The backup service account must have Editor access to this folder.</description>
+    <externalId>false</externalId>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <label>Drive Root Folder ID</label>
+    <length>100</length>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

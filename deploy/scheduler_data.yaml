@@ -1,0 +1,13 @@
+name: sf-backup-${CLIENT_SLUG}-data-scheduler
+location: us-central1
+schedule: "0 2 * * *"
+timeZone: America/Chicago
+httpTarget:
+  uri: https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${GCP_PROJECT_ID}/jobs/sf-backup-${CLIENT_SLUG}-data:run
+  httpMethod: POST
+  oauthToken:
+    serviceAccountEmail: sf-backup-${CLIENT_SLUG}@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+retryConfig:
+  retryCount: 1
+  minBackoffDuration: 300s
+  maxBackoffDuration: 3600s

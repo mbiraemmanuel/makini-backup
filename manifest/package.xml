@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>MakiniBackupInstallHandler</members>
+        <members>MakiniBackupScheduler</members>
+        <members>MakiniBackupCallout</members>
+        <members>MakiniBackupTest</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Backup_Configuration__mdt-Backup_Configuration.Default</members>
+        <name>CustomMetadata</name>
+    </types>
+    <types>
+        <members>Backup_Configuration__mdt</members>
+        <members>Backup_Configuration__mdt.Backup_Mode__c</members>
+        <members>Backup_Configuration__mdt.Cloud_Run_Job_Name__c</members>
+        <members>Backup_Configuration__mdt.Drive_Root_Folder_ID__c</members>
+        <members>Backup_Configuration__mdt.GCP_Project_ID__c</members>
+        <members>Backup_Configuration__mdt.GCP_Region__c</members>
+        <members>Backup_Configuration__mdt.Notification_Email__c</members>
+        <members>Backup_Configuration__mdt.Retention_Days__c</members>
+        <members>Backup_Configuration__mdt.SF_API_Version__c</members>
+        <members>Backup_Configuration__mdt.SF_Username__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>Makini_Backup_Integration</members>
+        <name>PermissionSet</name>
+    </types>
+    <version>66.0</version>
+</Package>

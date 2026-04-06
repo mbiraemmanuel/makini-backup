@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Default</label>
+    <protected>false</protected>
+    <!-- ──────────────────────────────────────────────────────────────────
+         TEMPLATE RECORD — fill these values after installing the package.
+         You can edit them at: Setup → Custom Metadata Types → Backup Configuration → Manage Records
+         Or use the Makini Setup Wizard at /setup in the dashboard.
+         ────────────────────────────────────────────────────────────────── -->
+    <values>
+        <field>GCP_Project_ID__c</field>
+        <value xsi:type="xsd:string">your-gcp-project-id</value>
+    </values>
+    <values>
+        <field>GCP_Region__c</field>
+        <value xsi:type="xsd:string">us-central1</value>
+    </values>
+    <values>
+        <field>Cloud_Run_Job_Name__c</field>
+        <value xsi:type="xsd:string">sf-backup</value>
+    </values>
+    <values>
+        <field>Drive_Root_Folder_ID__c</field>
+        <value xsi:type="xsd:string">your-google-drive-folder-id</value>
+    </values>
+    <values>
+        <field>Notification_Email__c</field>
+        <value xsi:type="xsd:string">admin@example.com</value>
+    </values>
+    <values>
+        <field>Backup_Mode__c</field>
+        <value xsi:type="xsd:string">full</value>
+    </values>
+    <values>
+        <field>Retention_Days__c</field>
+        <value xsi:type="xsd:double">90</value>
+    </values>
+    <values>
+        <field>SF_API_Version__c</field>
+        <value xsi:type="xsd:string">62.0</value>
+    </values>
+    <values>
+        <field>SF_Username__c</field>
+        <value xsi:type="xsd:string">backup.user@yourorg.com</value>
+    </values>
+</CustomMetadata>

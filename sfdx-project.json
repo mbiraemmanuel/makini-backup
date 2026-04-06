@@ -1,0 +1,19 @@
+{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "Makini-SF-Backup",
+      "versionName": "Version 1.0",
+      "versionNumber": "1.0.0.NEXT",
+      "versionDescription": "Full-org Salesforce backup solution by Makini Consulting. Installs a pre-configured Connected App, Permission Set, and Custom Metadata Type so clients can be onboarded in minutes.",
+      "postInstallScript": "MakiniBackupInstallHandler",
+      "postInstallUrl": "https://github.com/makini-consulting/sf-backup#post-install-steps"
+    }
+  ],
+  "name": "Makini-SF-Backup",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "66.0",
+  "packageAliases": {}
+}

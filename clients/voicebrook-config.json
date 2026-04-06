@@ -1,0 +1,50 @@
+{
+  "client_slug": "voicebrook",
+  "client_name": "Voicebrook",
+  "sf_username": "emmanuel.maina@voicebrook.com.sarabi",
+  "sf_api_version": "59.0",
+  "sf_environment": "sandbox",
+  "sf_instance_url": "https://voicebrook--sarabi.sandbox.my.salesforce.com",
+  "consumer_key": "3MVG9mLJCAqQmppn118.lwfL_rtBW692Fl9Dw9dJKtMdOB4qE6HoCs3m44kMAxHhalN_rQzA7canOdI6FRpuT",
+  "backup": {
+    "data": {
+      "enabled": true,
+      "schedule_cron": "0 2 * * *",
+      "schedule_timezone": "America/Chicago",
+      "incremental": true,
+      "object_exclusions": [],
+      "object_inclusions": []
+    },
+    "metadata": {
+      "enabled": true,
+      "schedule_cron": "0 3 * * 0",
+      "schedule_timezone": "America/Chicago",
+      "metadata_type_exclusions": []
+    },
+    "files": {
+      "enabled": false,
+      "schedule_cron": "0 4 * * 0",
+      "max_file_size_mb": 500,
+      "storage_backend": "drive"
+    }
+  },
+  "retention_days": 90,
+  "drive": {
+    "root_folder_id": "1m7oQSczAAiFJWl6xn5QiLwqQfSSkD1PI",
+    "storage_backend": "gcs"
+  },
+  "notifications": {
+    "alert_emails": [
+      "voicebrookprosandbox@gmail.com"
+    ],
+    "notify_on": [
+      "error",
+      "partial"
+    ]
+  },
+  "gcp": {
+    "project_id": "makini-backup",
+    "region": "us-central1",
+    "cloud_run_job": "sf-backup-voicebrook"
+  }
+}

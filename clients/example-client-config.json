@@ -1,0 +1,46 @@
+{
+  "client_slug": "example-client",
+  "client_name": "Example Client Inc.",
+  "sf_username": "sf-integration@example.com",
+  "sf_api_version": "59.0",
+  "sf_environment": "production",
+  "backup": {
+    "data": {
+      "enabled": true,
+      "schedule_cron": "0 2 * * *",
+      "schedule_timezone": "America/Chicago",
+      "incremental": true,
+      "object_exclusions": [],
+      "object_inclusions": []
+    },
+    "metadata": {
+      "enabled": true,
+      "schedule_cron": "0 3 * * 0",
+      "schedule_timezone": "America/Chicago",
+      "metadata_type_exclusions": []
+    },
+    "files": {
+      "enabled": false,
+      "schedule_cron": "0 4 * * 0",
+      "max_file_size_mb": 500,
+      "storage_backend": "drive"
+    }
+  },
+  "retention_days": 90,
+  "drive": {
+    "root_folder_id": "REPLACE_WITH_DRIVE_FOLDER_ID",
+    "storage_backend": "drive"
+  },
+  "notifications": {
+    "alert_emails": [
+      "client@example.com",
+      "makini-ops@makiniconsulting.com"
+    ],
+    "notify_on": ["failure", "success", "partial"]
+  },
+  "gcp": {
+    "project_id": "makini-sf-backup-prod",
+    "region": "us-central1",
+    "cloud_run_job": "sf-backup-example-client"
+  }
+}

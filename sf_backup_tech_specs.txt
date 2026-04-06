@@ -1,0 +1,760 @@
+================================================================================
+MAKINI CONSULTING — SALESFORCE FULL-ORG BACKUP SOLUTION
+TECHNICAL SPECIFICATIONS
+================================================================================
+makiniconsulting.com
+Generated: March 19, 2026
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. SYSTEM REQUIREMENTS
+--------------------------------------------------------------------------------
+
+Operating System
+  - Linux (Ubuntu 22.04+ recommended) or macOS 13+
+  - Cloud Run container: linux/amd64
+
+Python
+  - Version: 3.11 or higher
+  - Package manager: pip 23+
+
+Node / npm (optional, for Apps Script alternative)
+  - Node.js 18+ LTS
+
+Google Cloud SDK
+  - gcloud CLI: latest stable
+  - Required for Secret Manager access and Cloud Run deployment
+
+Salesforce CLI
+  - sf (v2): latest stable
+  - Install: npm install -g @salesforce/cli
+  - Required for metadata retrieval (sf project retrieve start)
+
+Docker
+  - Version: 24+
+  - Required for building Cloud Run container images
+
+
+--------------------------------------------------------------------------------
+2. PYTHON DEPENDENCIES
+--------------------------------------------------------------------------------
+
+Core auth and API
+  PyJWT==2.8.0
+  cryptography==42.0.5
+  requests==2.31.0
+  simple-salesforce==1.12.5
+
+Google Drive integration
+  google-api-python-client==2.118.0
+  google-auth==2.28.0
+  google-auth-httplib2==0.2.0
+  google-auth-oauthlib==1.2.0
+
+GCP Secret Manager
+  google-cloud-secret-manager==2.20.0
+
+Scheduling / async
+  schedule==1.2.1
+
+Notifications
+  sendgrid==6.11.0
+
+Utilities
+  python-dateutil==2.9.0
+  tqdm==4.66.2
+  tenacity==8.2.3
+  loguru==0.7.2
+
+Install all:
+  pip install PyJWT==2.8.0 cryptography==42.0.5 requests==2.31.0 \
+    simple-salesforce==1.12.5 google-api-python-client==2.118.0 \
+    google-auth==2.28.0 google-auth-httplib2==0.2.0 \
+    google-auth-oauthlib==1.2.0 google-cloud-secret-manager==2.20.0 \
+    schedule==1.2.1 sendgrid==6.11.0 python-dateutil==2.9.0 \
+    tqdm==4.66.2 tenacity==8.2.3 loguru==0.7.2
+
+
+--------------------------------------------------------------------------------
+3. SALESFORCE API SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+API Version
+  - Target: v59.0 (Winter '24) or latest available in client org
+  - Minimum supported: v52.0
+
+Authentication — JWT Bearer Flow
+  - Grant type:  urn:ietf:params:oauth:grant-type:jwt-bearer
+  - Token endpoint (production): https://login.salesforce.com/services/oauth2/token
+  - Token endpoint (sandbox):    https://test.salesforce.com/services/oauth2/token
+  - Token lifetime: 3600 seconds (1 hour)
+  - JWT expiry window: 300 seconds (5 minutes)
+  - Algorithm: RS256
+  - Key size: 2048-bit RSA minimum
+
+Connected App Requirements
+  - OAuth scopes required:
+      api                              (Manage user data via APIs)
+      refresh_token offline_access     (Perform requests at any time)
+  - Use digital signatures: ENABLED
+  - Certificate: X.509 self-signed, 365-day minimum validity
+  - Permitted users: Admin approved users are pre-authorized
+  - Callback URL: https://localhost (placeholder; not used in JWT flow)
+
+Integration User Requirements
+  - Profile: API Only (custom profile, no UI login)
+  - License: Salesforce (full) or Integration (API-only license if available)
+  - MFA exemption: required for JWT Bearer flow
+  - Password never expires: ENABLED
+  - Required object permissions: Read on all backed-up objects
+  - Required system permissions:
+      API Enabled
+      View All Data (recommended for full backup)
+      Manage Connected Apps (not required at runtime)
+
+Bulk API 2.0 Specifications
+  - Endpoint: /services/data/vXX.0/jobs/query
+  - Job type: query
+  - Content type: CSV
+  - Concurrency mode: parallel (default)
+  - Max concurrent jobs: 5 per org (Salesforce governor limit)
+  - Max records per job: unlimited
+  - Column delimiter: COMMA
+  - Line ending: LF
+  - Poll interval: 10 seconds
+  - Poll timeout: 3600 seconds (1 hour)
+  - Retry on: 503, 429, QUERY_TIMEOUT (up to 3 retries with exponential backoff)
+
+REST API Endpoints Used
+  - Object discovery:  GET /services/data/vXX.0/sobjects
+  - Object describe:   GET /services/data/vXX.0/sobjects/{SObjectName}/describe
+  - Metadata types:    GET /services/data/vXX.0/describe/metadataTypes
+  - ContentVersion:    GET /services/data/vXX.0/sobjects/ContentVersion/{Id}/VersionData
+  - Limits check:      GET /services/data/vXX.0/limits
+
+Metadata API Specifications
+  - Retrieval method: SFDX CLI (sf project retrieve start)
+  - Output format: SFDX source format (human-readable, deployable)
+  - Package.xml: dynamically generated per run
+  - Max components per retrieve: 10,000 (chunked if exceeded)
+  - Metadata types with chunking required:
+      Report          (commonly exceeds 10k in large orgs)
+      Dashboard
+      EmailTemplate
+      Document
+  - SFDX CLI flags:
+      --wait 60           (minutes before timeout)
+      --target-org        (username or alias)
+      --retrieve-dir      (local output path)
+      --manifest          (path to package.xml)
+
+Governor Limits to Respect
+  - Bulk API v2 concurrent jobs: 5
+  - REST API daily requests: 15,000 per license (standard) / 1,000,000 (unlimited)
+  - Metadata retrieve size: 400 MB per request (uncompressed)
+  - ContentVersion download: no explicit limit; stream directly, do not buffer in memory
+
+
+--------------------------------------------------------------------------------
+4. GOOGLE CLOUD PLATFORM SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+GCP Project Setup
+  - One GCP project per Makini environment (dev / prod)
+  - Project naming convention: makini-sf-backup-{env}
+
+Required APIs to Enable
+  - Google Drive API               (drive/v3)
+  - Secret Manager API             (secretmanager/v1)
+  - Cloud Run API                  (run/v2)
+  - Cloud Scheduler API            (cloudscheduler/v1)
+  - Cloud Build API                (cloudbuild/v1)
+  - Cloud Logging API              (logging/v2)
+  - Artifact Registry API          (artifactregistry/v1)
+
+Service Account Specifications
+  - One service account per client org
+  - Naming: sf-backup-{client-slug}@{project-id}.iam.gserviceaccount.com
+  - Required IAM roles:
+      Secret Manager Secret Accessor
+      Logging Log Writer
+      Cloud Run Invoker (if triggering other jobs)
+  - Drive access: granted at folder level (not org-wide)
+      Role: Editor on /SF Backups/ folder only
+  - Key format: JSON (stored in Secret Manager, never on disk)
+
+GCP Secret Manager — Secrets Per Client
+  - sf-{client}-private-key         RSA private key PEM (for JWT signing)
+  - sf-{client}-consumer-key        Salesforce Connected App consumer key
+  - sf-{client}-username            Salesforce integration user username
+  - sf-{client}-instance-url        Salesforce org instance URL
+  - gcp-{client}-sa-json            GCP service account JSON (for Drive access)
+  - sendgrid-api-key                Shared SendGrid API key (Makini-level secret)
+
+Secret rotation
+  - SF private key / certificate: rotate annually (365-day cert cycle)
+  - Consumer key: rotate if compromised only
+  - Service account key: rotate every 90 days (recommended)
+
+Google Drive Specifications
+  - Drive API version: v3
+  - Upload method:
+      < 5 MB:   simple upload (uploadType=media)
+      >= 5 MB:  resumable upload (uploadType=resumable)
+  - Chunk size for resumable uploads: 10 MB
+  - MIME type for CSV: text/csv
+  - MIME type for ZIP: application/zip
+  - MIME type for JSON: application/json
+  - Folder structure:
+      /SF Backups/                      (root; shared with service account)
+      /SF Backups/YYYY-MM-DD/           (one per run)
+      /SF Backups/YYYY-MM-DD/data/      (CSV object exports)
+      /SF Backups/YYYY-MM-DD/metadata/  (SFDX zip)
+      /SF Backups/YYYY-MM-DD/files/     (binary SF files)
+      /SF Backups/YYYY-MM-DD/manifest.json
+
+Drive storage limits
+  - Google Workspace Business Standard: 2 TB pooled
+  - Google Workspace Business Plus / Enterprise: unlimited (with policy)
+  - For orgs with large file attachments (> 50 GB): route file backup
+    to Google Cloud Storage (GCS) bucket instead of Drive
+
+
+--------------------------------------------------------------------------------
+5. CLOUD RUN SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+Container Image
+  - Base image: python:3.11-slim
+  - Additional packages installed at build:
+      nodejs (for Salesforce CLI)
+      npm
+      @salesforce/cli (sf v2)
+      zip / unzip
+  - Artifact Registry repo: us-central1-docker.pkg.dev/{project-id}/sf-backup/backup-runner
+
+Resource Allocation
+  - CPU: 2 vCPU
+  - Memory: 4 GB
+  - Timeout: 3600 seconds (1 hour maximum per Cloud Run job)
+  - Concurrency: 1 (one job per container instance)
+  - Max retries: 3 (Cloud Run job retry policy)
+
+Environment Variables (non-secret, set at deployment)
+  - CLIENT_SLUG              Client identifier (e.g., "connectup-mn")
+  - SF_API_VERSION           Salesforce API version (e.g., "59.0")
+  - BACKUP_MODE              "data" | "metadata" | "files" | "full"
+  - RETENTION_DAYS           Number of days to retain backup folders
+  - NOTIFICATION_EMAILS      Comma-separated list of alert recipients
+  - GCP_PROJECT_ID           GCP project ID
+  - LOG_LEVEL                "INFO" | "DEBUG" | "WARNING"
+
+Cloud Scheduler Configuration
+  - Nightly data job:     cron "0 2 * * *"  (2:00 AM client timezone)
+  - Weekly metadata job:  cron "0 3 * * 0"  (3:00 AM Sunday)
+  - Weekly file job:      cron "0 4 * * 0"  (4:00 AM Sunday, if enabled)
+  - Time zone: set per client (e.g., America/New_York, America/Chicago)
+  - HTTP method: POST
+  - Target: Cloud Run job execution endpoint
+  - Auth: OIDC token (service account)
+
+
+--------------------------------------------------------------------------------
+6. DATA BACKUP — OBJECT SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+Object Discovery Logic
+  - Call GET /sobjects, iterate all sObject describe results
+  - Include object if ALL of the following are true:
+      queryable == true
+      retrieveable == true
+      createable OR updateable (exclude pure system/read-only objects)
+  - Exclude if name matches any in the exclusion list (see below)
+
+Default Exclusion List (system objects not useful to back up)
+  - AggregateResult
+  - ApexLog
+  - AsyncApexJob
+  - BackgroundOperation
+  - BulkApiV2EventStore (internal)
+  - CronJobDetail
+  - CronTrigger
+  - EntityDefinition
+  - FieldDefinition
+  - FlowVariableView
+  - UserRecordAccess
+  - Vote
+  - LoginHistory (available via EventLogFile instead)
+  - SetupAuditTrail (exported separately as a special case)
+
+SOQL Export Query Template
+  Full backup:
+    SELECT {all_fields} FROM {SObjectName} ORDER BY Id
+
+  Incremental backup:
+    SELECT {all_fields} FROM {SObjectName}
+    WHERE LastModifiedDate >= {since_timestamp}
+    ORDER BY Id
+
+  Note: Objects without LastModifiedDate (e.g., ContentDocumentLink)
+        always run as full exports.
+
+Field Handling Rules
+  - Export ALL fields returned by describe (including formula, rollup, encrypted)
+  - Encrypted fields: exported as masked values per org security settings
+  - Long text area fields: exported as-is (Bulk API handles truncation at 32k chars)
+  - Binary fields (base64): NOT exported via Bulk API; handled by file export module
+  - Geolocation fields: exported as compound field (lat/lng as separate columns)
+  - Polymorphic lookup fields (What, Who, Owner): export as Id + Type columns
+
+CSV Output Specifications
+  - Encoding: UTF-8 with BOM (ensures Excel compatibility)
+  - Delimiter: comma
+  - Line ending: CRLF (Windows-compatible)
+  - Quote character: double-quote
+  - Null values: empty string (no placeholder)
+  - Boolean values: true / false (lowercase)
+  - Date format: ISO 8601 (YYYY-MM-DDTHH:MM:SS.sssZ)
+  - Filename: {SObjectName}.csv
+
+Manifest File (manifest.json) Schema
+  {
+    "run_id": "uuid-v4",
+    "client": "client-slug",
+    "run_type": "data | metadata | files | full",
+    "started_at": "ISO 8601 datetime",
+    "completed_at": "ISO 8601 datetime",
+    "duration_seconds": 0,
+    "sf_api_version": "59.0",
+    "sf_instance_url": "https://example.my.salesforce.com",
+    "objects": [
+      {
+        "name": "Account",
+        "record_count": 0,
+        "file_size_bytes": 0,
+        "status": "success | skipped | error",
+        "error_message": null
+      }
+    ],
+    "metadata": {
+      "types_retrieved": 0,
+      "zip_size_bytes": 0,
+      "status": "success | skipped | error"
+    },
+    "files": {
+      "count": 0,
+      "total_size_bytes": 0,
+      "status": "success | skipped | error"
+    },
+    "errors": [],
+    "drive_folder_id": "google-drive-folder-id",
+    "drive_folder_url": "https://drive.google.com/..."
+  }
+
+
+--------------------------------------------------------------------------------
+7. METADATA BACKUP — TYPE SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+SFDX Retrieve Command
+  sf project retrieve start \
+    --target-org  {sf_username} \
+    --retrieve-dir {output_dir} \
+    --manifest    {package_xml_path} \
+    --wait        60
+
+Package.xml Generation
+  - Query Metadata API: GET /services/data/vXX.0/describe/metadataTypes
+  - For each type: add wildcard member (*) to package.xml
+  - API version in package.xml: match org's highest supported version
+  - Types requiring explicit member enumeration (no wildcard support):
+      Report
+      Dashboard
+      EmailTemplate
+      Document
+      StandardValueSet
+
+Metadata Types Backed Up (complete list by category)
+
+  Schema & Data Model
+    CustomObject, CustomField, CustomMetadata, CustomSetting,
+    RecordType, CompactLayout, FieldSet, Index, BusinessProcess,
+    SharingReason, ValidationRule, WebLink
+
+  Code
+    ApexClass, ApexTrigger, ApexPage, ApexComponent,
+    LightningComponentBundle, AuraDefinitionBundle,
+    StaticResource, ExperienceBundle
+
+  Automation
+    Flow, FlowDefinition, WorkflowRule, WorkflowAlert,
+    WorkflowFieldUpdate, WorkflowOutboundMessage, WorkflowTask,
+    ApprovalProcess, ProcessFlowMigration, EscalationRules,
+    AssignmentRules, AutoResponseRules, MatchingRules, DuplicateRule
+
+  UI & Navigation
+    Layout, FlexiPage, CustomTab, CustomApplication,
+    CustomPageWebLink, HomePageLayout, HomePageComponent,
+    AppMenu, PathAssistant, QuickAction, GlobalValueSet,
+    StandardValueSet, PlatformCachePartition
+
+  Security & Access
+    Profile, PermissionSet, PermissionSetGroup, MutingPermissionSet,
+    SharingRules, SharingSet, Territory2Model, Territory2,
+    Territory2Rule, OrgWideEmailAddress, NetworkAccess,
+    CorsWhitelistOrigin, CspTrustedSite
+
+  Email & Messaging
+    EmailTemplate, LetterHead, ClassicLetterHead,
+    NotificationTypeConfig, MobileSettings (sub-settings)
+
+  Reports & Analytics
+    Report, ReportType, Dashboard, AnalyticSnapshot
+
+  Integration & Connected Systems
+    ConnectedApp, NamedCredential, RemoteSiteSetting,
+    ExternalDataSource, ExternalServiceRegistration,
+    AuthProvider, SamlSsoConfig, Certificate
+
+  Org Configuration
+    Settings (all sub-types), CustomLabels, CustomPermission,
+    PlatformEventChannel, PlatformEventChannelMember,
+    ContentAsset, Document, ForecastingType
+
+  Einstein & AI
+    MLPredictionDefinition, MLDataDefinition,
+    EinsteinDomainCommit, AIApplication, AIApplicationConfig,
+    BotVersion, Bot
+
+  Experience Cloud
+    ExperienceBundle, Network, BrandingSet, NavigationMenu,
+    CustomSite, SiteDotCom
+
+Output Structure (SFDX source format)
+  metadata_output/
+    force-app/
+      main/
+        default/
+          classes/          (ApexClass files: .cls + .cls-meta.xml)
+          triggers/         (ApexTrigger files)
+          lwc/              (LWC bundles)
+          aura/             (Aura bundles)
+          flows/            (Flow definitions)
+          objects/          (CustomObject + CustomField per object)
+          profiles/         (Profile files)
+          permissionsets/   (PermissionSet files)
+          layouts/          (Layout files)
+          ... (all other types in standard SFDX directories)
+    package.xml
+
+  Entire directory zipped to: metadata_{YYYY-MM-DD}.zip
+  Zip uploaded to Drive: /SF Backups/YYYY-MM-DD/metadata/
+
+
+--------------------------------------------------------------------------------
+8. FILE & ATTACHMENT BACKUP SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+ContentVersion (Salesforce Files)
+  - Query: SELECT Id, Title, FileExtension, ContentSize, VersionData,
+           ContentDocumentId, CreatedDate, LastModifiedDate
+           FROM ContentVersion WHERE IsLatest = true
+  - Download endpoint: GET /sobjects/ContentVersion/{Id}/VersionData
+  - Stream directly to Drive (do not buffer full file in memory)
+  - Filename: {ContentDocumentId}_{Title}.{FileExtension}
+  - Index file: content_version_index.csv (maps IDs to filenames)
+
+Legacy Attachments
+  - Query: SELECT Id, Name, ContentType, BodyLength, ParentId,
+           CreatedDate FROM Attachment
+  - Download endpoint: GET /sobjects/Attachment/{Id}/Body
+  - Filename: {Id}_{Name}
+  - Index file: attachment_index.csv
+
+File Download Specifications
+  - HTTP streaming: response.iter_content(chunk_size=10 * 1024 * 1024)
+  - Resumable Drive upload for files > 5 MB
+  - Max retries per file: 3
+  - On repeated failure: log and skip; report in manifest
+  - Parallel downloads: max 3 concurrent (respect SF API rate limits)
+
+Storage Routing
+  - Files < 10 GB total per run: upload to Google Drive
+  - Files >= 10 GB total per run: route to GCS bucket
+    Bucket naming: makini-sf-files-{client-slug}
+    Storage class: NEARLINE (infrequent access, lower cost)
+
+
+--------------------------------------------------------------------------------
+9. ERROR HANDLING & RETRY SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+Retry Policy (using tenacity library)
+  - Max attempts: 3
+  - Wait strategy: exponential backoff
+  - Initial wait: 5 seconds
+  - Multiplier: 2x
+  - Max wait: 120 seconds
+  - Retry on HTTP status codes: 429, 500, 502, 503, 504
+  - Retry on Salesforce error codes: QUERY_TIMEOUT, REQUEST_LIMIT_EXCEEDED
+
+Non-retryable Errors (skip object, log, continue)
+  - INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY
+  - INVALID_FIELD (field removed since last run)
+  - ENTITY_IS_DELETED
+  - MALFORMED_QUERY
+
+Run Failure Behavior
+  - Single object failure: log error, skip object, continue with remaining objects
+  - Auth failure: abort entire run, send immediate alert
+  - Drive upload failure: retry 3x, then abort run and alert
+  - Metadata retrieval failure: log, alert, mark metadata status as error in manifest
+  - Partial run: manifest marks overall status as "partial"
+
+Alerting Thresholds
+  - Immediate alert: auth failure, Drive unavailable, run abort
+  - End-of-run alert (always): run summary with object count, errors, duration
+  - Threshold alert: > 10% of objects fail in a single run
+
+
+--------------------------------------------------------------------------------
+10. SECURITY SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+RSA Key Pair Generation
+  openssl genrsa -out private.pem 2048
+  openssl req -new -x509 -key private.pem -out certificate.pem -days 365
+
+  Protect private key:
+    chmod 600 private.pem
+    Store ONLY in GCP Secret Manager — never on disk in production
+
+JWT Token Structure
+  Header:  { "alg": "RS256" }
+  Payload: {
+    "iss": "{consumer_key}",
+    "sub": "{integration_username}",
+    "aud": "https://login.salesforce.com",
+    "exp": {current_unix_time + 300}
+  }
+  Signature: RS256(base64url(header) + "." + base64url(payload), private_key)
+
+Transport Security
+  - All API calls: HTTPS / TLS 1.2 minimum
+  - Certificate validation: enforced (no verify=False)
+  - Drive API: OAuth2 via service account JSON (google-auth library)
+
+Data at Rest
+  - Google Drive: AES-256 encryption (Google-managed)
+  - GCP Secret Manager: AES-256 encryption (Google-managed)
+  - Cloud Run: ephemeral filesystem, wiped after job completion
+  - Optional client-side encryption: GPG symmetric encryption of CSVs
+    gpg --symmetric --cipher-algo AES256 --batch \
+        --passphrase-file /path/to/passphrase Account.csv
+
+Principle of Least Privilege
+  - SF integration user: Read only on backed-up objects; no modify permissions
+  - GCP service account: Editor on Drive folder only; no org-level Drive access
+  - Cloud Run service account: Secret Accessor + Log Writer only
+  - No shared credentials between client deployments
+
+Audit Logging
+  - All Cloud Run job executions logged to Cloud Logging
+  - Log fields: run_id, client, status, object_count, error_count, duration
+  - Log retention: 30 days (Cloud Logging default; extend if required by client)
+  - Salesforce: all API calls logged in Salesforce Login History and API Usage
+
+
+--------------------------------------------------------------------------------
+11. RETENTION & CLEANUP SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+Retention Policy
+  - Configurable per client in client config JSON
+  - Default: 90 days
+  - Starter tier: 30 days
+  - Premium tier: 365 days
+
+Cleanup Job
+  - Runs at end of every backup job
+  - Lists all dated folders in /SF Backups/
+  - Deletes folders older than retention_days
+  - Uses Drive API: files().delete(fileId=folder_id)
+  - Logs deleted folders in manifest
+
+Recovery Point Objective (RPO)
+  - Data: 24 hours (nightly backup)
+  - Metadata: 7 days (weekly backup)
+  - Files: 7 days (weekly backup)
+
+Recovery Time Objective (RTO) — Makini-managed restore
+  - Data restore (single object): < 2 hours
+  - Data restore (full org): 4–24 hours depending on org size
+  - Metadata restore: < 4 hours
+  - Target for Premium SLA: 4 hours end-to-end
+
+
+--------------------------------------------------------------------------------
+12. CLIENT CONFIGURATION SCHEMA
+--------------------------------------------------------------------------------
+
+Per-client config file: {client-slug}-config.json
+
+{
+  "client_slug": "string",
+  "client_name": "string",
+  "sf_username": "string (integration user email)",
+  "sf_api_version": "59.0",
+  "sf_environment": "production | sandbox",
+  "backup": {
+    "data": {
+      "enabled": true,
+      "schedule_cron": "0 2 * * *",
+      "schedule_timezone": "America/Chicago",
+      "incremental": true,
+      "object_exclusions": ["ExcludedObject__c"],
+      "object_inclusions": []
+    },
+    "metadata": {
+      "enabled": true,
+      "schedule_cron": "0 3 * * 0",
+      "schedule_timezone": "America/Chicago",
+      "metadata_type_exclusions": []
+    },
+    "files": {
+      "enabled": false,
+      "schedule_cron": "0 4 * * 0",
+      "max_file_size_mb": 500,
+      "storage_backend": "drive | gcs"
+    }
+  },
+  "retention_days": 90,
+  "drive": {
+    "root_folder_id": "google-drive-folder-id",
+    "storage_backend": "drive"
+  },
+  "notifications": {
+    "alert_emails": ["client@example.com", "makini-ops@makiniconsulting.com"],
+    "notify_on": ["failure", "success", "partial"]
+  },
+  "gcp": {
+    "project_id": "makini-sf-backup-prod",
+    "region": "us-central1",
+    "cloud_run_job": "sf-backup-{client-slug}"
+  }
+}
+
+
+--------------------------------------------------------------------------------
+13. FOLDER & FILE STRUCTURE (Repository)
+--------------------------------------------------------------------------------
+
+sf-backup/
+  Dockerfile
+  requirements.txt
+  README.md
+  clients/
+    {client-slug}-config.json         (one per client)
+  src/
+    main.py                           (entry point)
+    auth/
+      jwt_auth.py                     (JWT Bearer token generation)
+    data/
+      object_enumerator.py            (discover all sObjects)
+      bulk_exporter.py                (Bulk API 2.0 job management)
+      file_downloader.py              (ContentVersion + Attachment download)
+      incremental.py                  (LastModifiedDate filter logic)
+    metadata/
+      package_builder.py              (dynamic package.xml generation)
+      metadata_retriever.py           (SFDX CLI subprocess wrapper)
+    storage/
+      drive_client.py                 (Google Drive API wrapper)
+      gcs_client.py                   (GCS fallback for large files)
+      retention_manager.py            (delete old backup folders)
+    notifications/
+      notifier.py                     (SendGrid email summaries)
+    utils/
+      manifest.py                     (manifest.json builder)
+      logger.py                       (structured logging via loguru)
+      secrets.py                      (GCP Secret Manager client)
+      retry.py                        (tenacity retry decorators)
+  deploy/
+    cloud_run_job.yaml                (Cloud Run job spec)
+    scheduler_data.yaml               (Cloud Scheduler config)
+    scheduler_metadata.yaml
+  scripts/
+    onboard_client.sh                 (new client setup automation)
+    rotate_keys.sh                    (annual key rotation)
+    test_connection.py                (validate SF + Drive auth)
+
+
+--------------------------------------------------------------------------------
+14. ONBOARDING CHECKLIST — NEW CLIENT
+--------------------------------------------------------------------------------
+
+Salesforce (client's org)
+  [ ] Create RSA key pair (openssl)
+  [ ] Create Connected App with JWT Bearer + digital signature
+  [ ] Upload certificate.pem to Connected App
+  [ ] Note Consumer Key
+  [ ] Create integration user (API-only profile)
+  [ ] Assign integration user to Connected App via Permission Set
+  [ ] Test JWT auth: python src/auth/jwt_auth.py
+  [ ] Confirm View All Data permission on integration user
+
+Google (client's Workspace)
+  [ ] Create /SF Backups/ folder in client's Drive
+  [ ] Share folder with Makini service account (Editor)
+  [ ] Note folder ID from Drive URL
+
+GCP (Makini's project)
+  [ ] Create service account: sf-backup-{client-slug}@...
+  [ ] Store all secrets in Secret Manager (5 secrets per client)
+  [ ] Create {client-slug}-config.json and commit to repo
+  [ ] Build and push Docker image to Artifact Registry
+  [ ] Deploy Cloud Run job for data backup
+  [ ] Deploy Cloud Run job for metadata backup (if enabled)
+  [ ] Create Cloud Scheduler triggers
+  [ ] Run first manual backup: gcloud run jobs execute sf-backup-{client-slug}
+  [ ] Verify Drive folder populated correctly
+  [ ] Verify manifest.json shows no errors
+  [ ] Send client confirmation with Drive folder link
+
+Estimated onboarding time: 90–120 minutes per client
+
+
+--------------------------------------------------------------------------------
+15. ESTIMATED INFRASTRUCTURE COSTS (PER CLIENT / MONTH)
+--------------------------------------------------------------------------------
+
+Google Cloud Run
+  - Typical data job: ~10 min @ 2 vCPU / 4 GB
+  - 30 runs/month (nightly) = ~300 vCPU-min + 600 GB-min memory
+  - Estimated cost: $0.50–$1.50/month
+
+Cloud Scheduler
+  - $0.10 per job per month
+  - 2–3 jobs: ~$0.30/month
+
+Secret Manager
+  - $0.06 per secret per month x 5 secrets = $0.30/month
+  - API access calls: negligible
+
+Cloud Logging
+  - First 50 GB/month: free
+  - Typical log volume per client: < 1 GB/month
+
+Google Drive Storage
+  - CSV data: typically 1–10 GB per run depending on org size
+  - Metadata zip: typically 10–500 MB per org
+  - 90-day retention at 5 GB/run = ~450 GB (included in client's Workspace storage)
+
+Total estimated GCP cost per client: $2–$5/month
+(Drive storage is on client's Workspace — no Makini cost)
+
+
+--------------------------------------------------------------------------------
+END OF TECHNICAL SPECIFICATIONS
+Makini Consulting — makiniconsulting.com
+================================================================================

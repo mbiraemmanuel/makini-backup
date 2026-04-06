@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Grants the Makini Backup integration user access to the Makini SF Backup Connected App and the Salesforce API. Assign this permission set to your dedicated backup integration user after installing the package.</description>
+    <label>Makini Backup Integration</label>
+    <hasActivationRequired>false</hasActivationRequired>
+
+    <!-- ── System permissions ─────────────────────────────────────────────── -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ApiEnabled</name>
+    </userPermissions>    <!-- ViewAllData prerequisites -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ChatterEnabledForUser</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewAllForecasts</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewEventLogFiles</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewPublicDashboards</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewPublicReports</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewRoles</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewSetup</name>
+    </userPermissions>    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewAllData</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ModifyMetadata</name>
+    </userPermissions>
+
+
+    <!-- ── Custom Metadata: read access ──────────────────────────────────── -->
+    <customMetadataTypeAccesses>
+        <enabled>true</enabled>
+        <name>Backup_Configuration__mdt</name>
+    </customMetadataTypeAccesses>
+
+</PermissionSet>
