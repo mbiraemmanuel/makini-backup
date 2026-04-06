@@ -9,9 +9,20 @@ import { GoogleAuth } from "google-auth-library";
 import type { Manifest, BackupRun } from "./types";
 
 function buildAuth() {
+  // Try base64-encoded first, then raw JSON
   const b64 = process.env.DASHBOARD_SA_JSON_B64;
-  if (!b64) throw new Error("DASHBOARD_SA_JSON_B64 env var not set");
-  const credentials = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+  const rawJson = process.env.DASHBOARD_SA_JSON;
+  
+  let credentials;
+  
+  if (b64) {
+    credentials = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+  } else if (rawJson) {
+    credentials = JSON.parse(rawJson);
+  } else {
+    throw new Error("Set DASHBOARD_SA_JSON or DASHBOARD_SA_JSON_B64 env var");
+  }
+  
   return new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/devstorage.read_only"],
