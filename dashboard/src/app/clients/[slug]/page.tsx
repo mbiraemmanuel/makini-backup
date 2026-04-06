@@ -31,34 +31,42 @@ export default async function ClientPage({ params, searchParams }: Props) {
   let runs: BackupRun[] = [];
   let totalPages = 1;
   let storageUrl: string;
+  let connectionError: string | null = null;
 
-  if (isGCS) {
-    allDates = await listGCSRunDates(slug);
-    totalPages = Math.ceil(allDates.length / limit);
-    const pageDates = allDates.slice(offset, offset + limit);
-    const runResults = await Promise.allSettled(
-      pageDates.map((date) => buildGCSBackupRun(slug, date))
-    );
-    runs = runResults
-      .filter(
-        (r): r is PromiseFulfilledResult<BackupRun> => r.status === "fulfilled"
-      )
-      .map((r) => r.value);
-    storageUrl = `https://console.cloud.google.com/storage/browser/makini-sf-files-${slug}?project=${config.gcp?.project_id}`;
-  } else {
-    const allFolders = await listBackupFolders(config.drive.root_folder_id);
-    totalPages = Math.ceil(allFolders.length / limit);
-    const pageFolders = allFolders.slice(offset, offset + limit);
-    const runResults = await Promise.allSettled(
-      pageFolders.map((folder) => buildBackupRun(folder))
-    );
-    runs = runResults
-      .filter(
-        (r): r is PromiseFulfilledResult<BackupRun> => r.status === "fulfilled"
-      )
-      .map((r) => r.value)
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-    storageUrl = `https://drive.google.com/drive/folders/${config.drive.root_folder_id}`;
+  try {
+    if (isGCS) {
+      allDates = await listGCSRunDates(slug);
+      totalPages = Math.ceil(allDates.length / limit);
+      const pageDates = allDates.slice(offset, offset + limit);
+      const runResults = await Promise.allSettled(
+        pageDates.map((date) => buildGCSBackupRun(slug, date))
+      );
+      runs = runResults
+        .filter(
+          (r): r is PromiseFulfilledResult<BackupRun> => r.status === "fulfilled"
+        )
+        .map((r) => r.value);
+      storageUrl = `https://console.cloud.google.com/storage/browser/makini-sf-files-${slug}?project=${config.gcp?.project_id}`;
+    } else {
+      const allFolders = await listBackupFolders(config.drive.root_folder_id);
+      totalPages = Math.ceil(allFolders.length / limit);
+      const pageFolders = allFolders.slice(offset, offset + limit);
+      const runResults = await Promise.allSettled(
+        pageFolders.map((folder) => buildBackupRun(folder))
+      );
+      runs = runResults
+        .filter(
+          (r): r is PromiseFulfilledResult<BackupRun> => r.status === "fulfilled"
+        )
+        .map((r) => r.value)
+        .sort((a, b) => (a.date < b.date ? 1 : -1));
+      storageUrl = `https://drive.google.com/drive/folders/${config.drive.root_folder_id}`;
+    }
+  } catch (err) {
+    connectionError = err instanceof Error ? err.message : "Failed to connect to storage";
+    storageUrl = isGCS 
+      ? `https://console.cloud.google.com/storage/browser/makini-sf-files-${slug}?project=${config.gcp?.project_id}`
+      : `https://drive.google.com/drive/folders/${config.drive.root_folder_id}`;
   }
 
   // Calculate stats
@@ -93,6 +101,33 @@ export default async function ClientPage({ params, searchParams }: Props) {
 
   return (
     <div className="p-6 lg:p-8 animate-fade-in">
+      {/* Connection Error Banner */}
+      {connectionError && (
+        <div className="mb-6 p-4 rounded-lg bg-warning/10 border border-warning/20">
+          <div className="flex items-start gap-3">
+            <svg
+              className="w-5 h-5 text-warning mt-0.5 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+              />
+            </svg>
+            <div>
+              <h3 className="font-medium text-warning">Storage Not Connected</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {connectionError}. Configure the <code className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">DASHBOARD_SA_JSON_B64</code> environment variable to connect to {isGCS ? "Google Cloud Storage" : "Google Drive"}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
         <div>
