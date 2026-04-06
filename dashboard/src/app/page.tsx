@@ -1,19 +1,38 @@
 import { getAllClientConfigs, getClientSummary } from "@/lib/clients";
 import { ClientCard } from "@/components/ClientCard";
-import type { ClientSummary, RunStatus } from "@/lib/types";
+import type { ClientConfig, ClientSummary, RunStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+// Create a fallback summary when Google Drive isn't accessible
+function createFallbackSummary(config: ClientConfig): ClientSummary {
+  return {
+    slug: config.client_slug,
+    name: config.client_name,
+    sf_environment: config.sf_environment,
+    last_run: null,
+    total_runs: 0,
+    drive_root_folder_id: config.drive.root_folder_id,
+    retention_days: config.retention_days,
+  };
+}
+
 async function loadSummaries(): Promise<ClientSummary[]> {
   const configs = getAllClientConfigs();
+  
   const results = await Promise.allSettled(
     configs.map((cfg) => getClientSummary(cfg))
   );
-  return results
-    .filter(
-      (r): r is PromiseFulfilledResult<ClientSummary> => r.status === "fulfilled"
-    )
-    .map((r) => r.value);
+  
+  // Map results, using fallback summaries for failed requests
+  return results.map((r, i) => {
+    if (r.status === "fulfilled") {
+      return r.value;
+    } else {
+      // Return fallback summary so organization still appears in list
+      return createFallbackSummary(configs[i]);
+    }
+  });
 }
 
 function computeStatus(s: ClientSummary): RunStatus {

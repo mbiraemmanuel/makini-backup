@@ -66,7 +66,14 @@ export function ClientCard({ summary }: { summary: ClientSummary }) {
             </p>
           </div>
         </div>
-        {run && <StatusBadge status={overallStatus} />}
+        {run ? (
+          <StatusBadge status={overallStatus} />
+        ) : summary.total_runs === 0 ? (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary text-xs font-medium text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+            Pending
+          </span>
+        ) : null}
       </div>
 
       {/* Stats grid */}
